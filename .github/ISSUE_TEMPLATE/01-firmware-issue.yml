@@ -1,0 +1,34 @@
+name: 🐛 固件问题反馈 / Bug Report
+description: 固件使用中遇到的问题（无法启动、WiFi、插件异常等）
+labels: [bug]
+body:
+  - type: dropdown
+    id: profile
+    attributes:
+      label: 固件版本 / Profile
+      options:
+        - PURE 纯净版
+        - PLUS 版
+    validations:
+      required: true
+  - type: input
+    id: build
+    attributes:
+      label: 固件日期 / Build date
+      description: 固件文件名或 Release tag 中的时间，如 26.07.03-22.45.24
+      placeholder: 26.07.03-22.45.24
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: 问题描述 / What happened
+      description: 具体现象、复现步骤、预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关日志 / Logs（可选）
+      description: dmesg / logread 的相关片段，或系统日志截图
+      render: text

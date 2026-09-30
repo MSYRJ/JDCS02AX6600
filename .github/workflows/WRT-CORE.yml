@@ -1,0 +1,427 @@
+#云编译公用核心
+name: WRT-CORE
+
+on:
+  workflow_call:
+    inputs:
+      WRT_CONFIG:
+        required: true
+        type: string
+      WRT_THEME:
+        required: true
+        type: string
+      WRT_NAME:
+        required: true
+        type: string
+      WRT_SSID:
+        required: true
+        type: string
+      WRT_WORD:
+        required: true
+        type: string
+      WRT_IP:
+        required: true
+        type: string
+      WRT_PW:
+        required: true
+        type: string
+      WRT_REPO:
+        required: true
+        type: string
+      WRT_BRANCH:
+        required: true
+        type: string
+      WRT_SOURCE:
+        required: true
+        type: string
+      WRT_PACKAGE:
+        required: false
+        type: string
+      WRT_PROFILE:
+        required: false
+        type: string
+        default: PURE
+      WRT_TEST:
+        required: false
+        type: string
+
+env:
+  GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+  WRT_CONFIG: ${{inputs.WRT_CONFIG}}
+  WRT_THEME: ${{inputs.WRT_THEME}}
+  WRT_NAME: ${{inputs.WRT_NAME}}
+  WRT_SSID: ${{inputs.WRT_SSID}}
+  WRT_WORD: ${{inputs.WRT_WORD}}
+  WRT_IP: ${{inputs.WRT_IP}}
+  WRT_PW: ${{inputs.WRT_PW}}
+  WRT_REPO: ${{inputs.WRT_REPO}}
+  WRT_BRANCH: ${{inputs.WRT_BRANCH}}
+  WRT_SOURCE: ${{inputs.WRT_SOURCE}}
+  WRT_PACKAGE: ${{inputs.WRT_PACKAGE}}
+  WRT_PROFILE: ${{inputs.WRT_PROFILE}}
+  WRT_PKG_INFO: 无（纯净版不集成外部插件）
+  WRT_TEST: ${{inputs.WRT_TEST}}
+
+jobs:
+  core:
+    name: ${{inputs.WRT_SOURCE}}
+    runs-on: ubuntu-latest
+    outputs:
+      cache_prefix: ${{steps.initialize-cache.outputs.cache_prefix}}
+      cache_key: ${{steps.initialize-cache.outputs.cache_key}}
+      cache_started: ${{steps.initialize-cache.outputs.cache_started}}
+    steps:
+      - name: Checkout Projects
+        uses: actions/checkout@v4
+
+      - name: Initialization Environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo -E apt -yqq purge firefox
+          sudo -E apt -yqq update
+          sudo -E apt -yqq full-upgrade
+          sudo -E apt -yqq autoremove --purge
+          sudo -E apt -yqq autoclean
+          sudo -E apt -yqq clean
+          sudo -E apt -yqq install dos2unix libfuse-dev libxml2 python3-setools python3-setuptools
+          sudo bash -c 'bash <(curl -sL https://build-scripts.immortalwrt.org/init_build_environment.sh)'
+          sudo -E systemctl daemon-reload
+          sudo -E timedatectl set-timezone "Asia/Shanghai"
+
+          sudo mkdir -p /mnt/build_wrt
+          sudo chown $USER:$USER /mnt/build_wrt
+          sudo ln -s /mnt/build_wrt $GITHUB_WORKSPACE/wrt
+
+      - name: Initialization Values
+        run: |
+          echo "WRT_DATE=$(TZ=UTC-8 date +"%y.%m.%d-%H.%M.%S")" >> $GITHUB_ENV
+          echo "WRT_MARK=${GITHUB_REPOSITORY%%/*}" >> $GITHUB_ENV
+          WRT_PROFILE_UPPER=$(echo "${WRT_PROFILE:-PURE}" | tr '[:lower:]' '[:upper:]')
+          case "$WRT_PROFILE_UPPER" in
+            PURE|PLUS) ;;
+            *) echo "Unsupported WRT_PROFILE: $WRT_PROFILE" >&2; exit 1 ;;
+          esac
+          echo "WRT_PROFILE=$WRT_PROFILE_UPPER" >> $GITHUB_ENV
+          if [[ "$WRT_PROFILE_UPPER" == "PLUS" ]]; then
+            echo "WRT_PROFILE_DESC=Plus 版，预装 OpenClash、PassWall2、Docker/Dockerman、AdGuard Home、DDNS、ttyd、UPnP 及分区扩容、网络唤醒等实用插件，刷完即用；启用 AdGuard Home 与代理插件前请先阅读 README 的「PLUS 版使用提示」" >> $GITHUB_ENV
+          else
+            echo "WRT_PROFILE_DESC=纯净版，轻量稳定，仅含基础网络与常用管理插件，扩展插件按需自行安装" >> $GITHUB_ENV
+          fi
+          WRT_INFO="${WRT_SOURCE%%/*}"
+          echo "WRT_INFO=$WRT_INFO" >> $GITHUB_ENV
+          echo "WRT_TARGET=$(grep -m 1 -oP '^CONFIG_TARGET_\K[\w]+(?=\=y)' ./Config/$WRT_CONFIG.txt)" >> $GITHUB_ENV
+          echo "WRT_WIFI=wifi-yes" >> $GITHUB_ENV
+          echo "WRT_EXTRA_CONFIG=$([[ -f ./Config/GENERAL_AX6600_${WRT_PROFILE_UPPER}.txt ]] && echo ./Config/GENERAL_AX6600_${WRT_PROFILE_UPPER}.txt || true)" >> $GITHUB_ENV
+          echo "WRT_KVER=none" >> $GITHUB_ENV
+          echo "WRT_LIST=none" >> $GITHUB_ENV
+
+      - name: Clone Code
+        run: |
+          git clone --depth=1 --single-branch --branch $WRT_BRANCH $WRT_REPO ./wrt/
+
+          cd ./wrt/ && echo "WRT_HASH=$(git log -1 --pretty=format:'%h')" >> $GITHUB_ENV
+
+          # GitHub Action 移除国内下载源
+          PROJECT_MIRRORS_FILE="./scripts/projectsmirrors.json"
+          if [ -f "$PROJECT_MIRRORS_FILE" ]; then
+            sed -i '/.cn\//d; /tencent/d; /aliyun/d' "$PROJECT_MIRRORS_FILE"
+          fi
+
+          # Plus 版补充 PassWall 依赖包 feed（xray/sing-box 等）。
+          # LuCI 插件本体由 Packages.sh 克隆到 package/，这里不再加 LuCI feed，避免同名包双重定义。
+          if [[ "$WRT_PROFILE" == "PLUS" ]]; then
+            echo "src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages" >> feeds.conf.default
+          fi
+
+      - name: Check Scripts
+        run: |
+          find ./ -maxdepth 3 -type f -iregex ".*\(txt\|sh\)$" -exec dos2unix {} \; -exec chmod +x {} \;
+
+      # Cache lifecycle adapted from VIKINGYFY/OpenWRT-CI (MIT, Copyright 2026 VIKINGYFY).
+      - name: Initialize Cache Values
+        id: initialize-cache
+        if: env.WRT_TEST != 'true'
+        run: |
+          WRT_SUBTARGET=$(grep -m 1 -oP "^CONFIG_TARGET_${WRT_TARGET}_\K[\w]+(?=\=y)" "./Config/$WRT_CONFIG.txt")
+          WRT_CACHE_SOURCE=${WRT_SOURCE//\//-}
+          WRT_CACHE_BRANCH=${WRT_BRANCH//\//-}
+          # 保留配置名隔离；PURE/PLUS 不加入键，继续共用缓存。
+          WRT_CACHE_PREFIX="wrt-$WRT_CACHE_SOURCE-$WRT_CACHE_BRANCH-$WRT_TARGET-$WRT_SUBTARGET-$WRT_CONFIG"
+          WRT_CACHE_KEY="$WRT_CACHE_PREFIX-$(git -C ./wrt rev-parse HEAD)"
+          WRT_CACHE_STARTED=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          {
+            echo "WRT_CACHE_PREFIX=$WRT_CACHE_PREFIX"
+            echo "WRT_CACHE_KEY=$WRT_CACHE_KEY"
+          } >> "$GITHUB_ENV"
+          {
+            echo "cache_prefix=$WRT_CACHE_PREFIX"
+            echo "cache_key=$WRT_CACHE_KEY"
+            echo "cache_started=$WRT_CACHE_STARTED"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Restore Build Cache
+        id: check-cache
+        if: env.WRT_TEST != 'true'
+        uses: actions/cache/restore@v4
+        with:
+          # 缓存内容（ccache/宿主工具/工具链）与 profile 无关，PURE 和 PLUS 共享同一份，避免缓存翻倍挤占配额
+          key: ${{env.WRT_CACHE_KEY}}
+          # 迁移时仅回退到同一源码提交的旧键，避免旧前缀混用其他分支。
+          restore-keys: |
+            ${{env.WRT_CACHE_PREFIX}}-
+            ${{env.WRT_CONFIG}}-${{env.WRT_INFO}}-${{env.WRT_HASH}}
+          path: |
+            ./wrt/.ccache
+            ./wrt/staging_dir/host*
+            ./wrt/staging_dir/tool*
+
+      - name: Prepare Restored Build Cache
+        if: env.WRT_TEST != 'true' && steps.check-cache.outputs.cache-matched-key != ''
+        run: |
+          if [ -d "./wrt/staging_dir" ]; then
+            find "./wrt/staging_dir" -type d -name "stamp" -not -path "*target*" | while read -r DIR; do
+              find "$DIR" -type f -exec touch {} +
+            done
+
+            mkdir -p ./wrt/tmp && echo "1" > ./wrt/tmp/.build
+
+            echo "toolchain skipped done!"
+          else
+            echo "caches missed!"
+          fi
+
+      - name: Update Feeds
+        run: |
+          cd ./wrt/
+
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          # 额外强制安装缺失的 python 依赖
+          ./scripts/feeds install -f python3-pysocks python3-unidecode
+
+
+      - name: Custom Packages
+        run: |
+          cd ./wrt/package/
+
+          : > "$GITHUB_WORKSPACE/package-versions.txt"
+          $GITHUB_WORKSPACE/Scripts/Packages.sh
+          if [[ "$WRT_PROFILE" == "PLUS" && -e ../feeds/passwall_packages/.git ]]; then
+            echo "passwall_packages(feed) Openwrt-Passwall/openwrt-passwall-packages main $(git -C ../feeds/passwall_packages rev-parse --short HEAD)" >> "$GITHUB_WORKSPACE/package-versions.txt"
+          fi
+          if [ -s "$GITHUB_WORKSPACE/package-versions.txt" ]; then
+            {
+              echo 'WRT_PKG_INFO<<EOF'
+              cat "$GITHUB_WORKSPACE/package-versions.txt"
+              echo 'EOF'
+            } >> "$GITHUB_ENV"
+          fi
+          #$GITHUB_WORKSPACE/Scripts/Handles.sh
+
+      - name: Custom Settings
+        run: |
+          cd ./wrt/
+
+          if [[ "${WRT_CONFIG,,}" == *"test"* ]]; then
+            cat $GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt >> .config
+          else
+            #cat $GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt $GITHUB_WORKSPACE/Config/GENERAL.txt >> .config
+            cat $GITHUB_WORKSPACE/Config/$WRT_CONFIG.txt $GITHUB_WORKSPACE/Config/GENERAL_AX6600.txt ${WRT_EXTRA_CONFIG:+$GITHUB_WORKSPACE/${WRT_EXTRA_CONFIG#./}} >> .config
+          fi
+
+          $GITHUB_WORKSPACE/Scripts/Settings.sh
+
+          make defconfig -j$(nproc) && make clean -j$(nproc)
+
+      - name: Download Packages
+        if: env.WRT_TEST != 'true'
+        run: |
+          cd ./wrt/
+
+          make download -j$(nproc)
+
+      - name: Compile Firmware
+        if: env.WRT_TEST != 'true'
+        run: |
+          cd ./wrt/
+
+          make -j$(nproc) || make -j1 V=s
+
+      - name: Save Build Cache
+        if: env.WRT_TEST != 'true' && success() && steps.check-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          key: ${{env.WRT_CACHE_KEY}}
+          path: |
+            ./wrt/.ccache
+            ./wrt/staging_dir/host*
+            ./wrt/staging_dir/tool*
+
+      - name: Machine Information
+        run: |
+          cd ./wrt/
+
+          echo "======================="
+          lscpu | grep -E "name|Core|Thread"
+          echo "======================="
+          df -h
+          echo "======================="
+          du -h --max-depth=1
+          echo "======================="
+
+      - name: Package Firmware
+        run: |
+          cd ./wrt/ && mkdir -p ./upload/
+
+          cp -f ./.config ./upload/Config-"$WRT_CONFIG"-"$WRT_PROFILE"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
+          if [ -s "$GITHUB_WORKSPACE/package-versions.txt" ]; then
+            cp -f "$GITHUB_WORKSPACE/package-versions.txt" ./upload/Packages-"$WRT_CONFIG"-"$WRT_PROFILE"-"$WRT_INFO"-"$WRT_BRANCH"-"$WRT_DATE".txt
+          fi
+
+          if [[ $WRT_TEST != 'true' ]]; then
+            echo "WRT_KVER=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^kernel - \K[\d\.]+' {} \;)" >> $GITHUB_ENV
+            echo "WRT_LIST=$(find ./bin/targets/ -type f -name "*.manifest" -exec grep -oP '^luci-(app|theme)[^ ]*' {} \; | tr '\n' ' ')" >> $GITHUB_ENV
+
+            find ./bin/targets/ -iregex ".*\(buildinfo\|json\|sha256sums\|packages\)$" -exec rm -rf {} +
+
+            for FILE in $(find ./bin/targets/ -type f -iname "*$WRT_TARGET*") ; do
+              EXT=$(basename $FILE | cut -d '.' -f 2-)
+              NAME=$(basename $FILE | cut -d '.' -f 1 | grep -io "\($WRT_TARGET\).*")
+              # 去掉恒定的平台前缀（qualcommax-），保留 ipq60xx 及设备型号
+              NAME=${NAME#*-}
+              NEW_FILE="$WRT_INFO"-"$WRT_BRANCH"-"${WRT_PROFILE,,}"-"$NAME"-"$WRT_DATE"."$EXT"
+              mv -f $FILE ./upload/$NEW_FILE
+            done
+
+            find ./bin/targets/ -type f -exec mv -f {} ./upload/ \;
+
+            # 对最终命名后的固件生成校验文件，供用户刷机前验证下载完整性；失败不阻塞发布
+            (cd ./upload/ && sha256sum *.bin > sha256sums.txt) || true
+
+            make clean -j$(nproc)
+          fi
+
+      - name: Build Summary
+        run: |
+          {
+            echo "## WRT Build Summary"
+            echo ""
+            echo "- Source: \`$WRT_SOURCE\`"
+            echo "- Branch: \`$WRT_BRANCH\`"
+            echo "- Config: \`$WRT_CONFIG\`"
+            echo "- Profile: \`$WRT_PROFILE\`"
+            echo "- Target: \`$WRT_TARGET\`"
+            echo "- Firmware mode: \`$WRT_WIFI\`"
+            echo "- Build time: \`$WRT_DATE\`"
+            echo "- Kernel: \`$WRT_KVER\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Release Firmware
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.WRT_CONFIG }}-${{ env.WRT_PROFILE }}-${{ env.WRT_INFO }}-${{ env.WRT_BRANCH }}-${{ env.WRT_DATE }}
+          files: ./wrt/upload/*.*
+          body: |
+            📦 OpenWrt 自动编译固件（AX6600 / IPQ6010）
+            ━━━━━━━━━━━━━━━━━━━━━━━
+
+            📌 基本信息
+            <!-- 源码仓库：${{ env.WRT_REPO }} -->
+            <!-- 编译分支：${{ env.WRT_BRANCH }} -->
+            固件版本：${{ env.WRT_PROFILE }}
+            版本说明：${{ env.WRT_PROFILE_DESC }}
+            提交版本：${{ env.WRT_HASH }}
+            编译时间：${{ env.WRT_DATE }}
+            ━━━━━━━━━━━━━━━━━━━━━━━
+
+            📌 外部插件来源
+            ${{ env.WRT_PKG_INFO }}
+            ━━━━━━━━━━━━━━━━━━━━━━━
+
+            🧩 设备与平台
+            设备型号：${{ env.WRT_SOURCE }}
+            硬件平台：${{ env.WRT_TARGET }}
+            CPU架构：Qualcomm IPQ6010 / IPQ60xx
+            ━━━━━━━━━━━━━━━━━━━━━━━
+
+            ⚙️ 固件特性
+            - NSS 硬件加速支持
+            - 基于 OpenWrt / ImmortalWrt
+            - 常用 LuCI 插件预集成
+            - 云端自动编译更新
+            - 支持自定义配置构建
+            ━━━━━━━━━━━━━━━━━━━━━━━
+
+            🔐 默认登录信息
+            管理地址：${{ env.WRT_IP }}
+            管理密码：${{ env.WRT_PW }}
+
+            WiFi 名称：${{ env.WRT_SSID }}
+            WiFi 密码：${{ env.WRT_WORD }}
+            ━━━━━━━━━━━━━━━━━━━━━━━
+
+            📶 WiFi 推荐设置（雅典娜三频三 WiFi）
+            - 2.4G（2×2）：信道 11，带宽 20MHz
+            - 5G-1 游戏频段（4×4）：信道 44，带宽 160MHz（无法开启或断流则回退 80MHz）
+            - 5G-2 影音频段（2×2）：信道 149，带宽 80MHz
+            - 通用：地区 US，发射功率 24 dBm，加密 WPA2-PSK（CCMP 算法）
+            ━━━━━━━━━━━━━━━━━━━━━━━
+            📥 下载与刷机说明
+            - 本 Release 为 ${{ env.WRT_PROFILE }} 版固件；两个版本分开发布，请从 README 下载入口按需选择
+            - 首次从原厂固件刷入：选文件名带 factory 的文件
+            - 已是 OpenWrt/ImmortalWrt 升级：选文件名带 sysupgrade 的文件
+            - 刷机 / 救砖完整教程：[刷机救砖教程](${{ github.server_url }}/${{ github.repository }}/blob/main/Docs/刷机救砖教程.md)
+            - Config-*.txt：本次编译的完整 .config 配置，便于复现或二次定制
+            - Packages-*.txt：外部插件（OpenClash / PassWall2 等）的仓库、分支与 commit 记录（纯净版无外部插件，无此文件）
+            - sha256sums.txt：固件校验文件，刷机前请先校验下载完整性（方法见 README 刷机前必读）
+
+            ⚠️ 风险提示
+            刷机存在风险，请确认：
+            - 已备份原厂固件
+            - 能进入 U-Boot 或 TTL 恢复
+            - 了解分区结构
+            ━━━━━━━━━━━━━━━━━━━━━━━
+
+            💡 插件信息
+            内置组件：
+            ${{ env.WRT_LIST }}
+
+            内核版本：
+            ${{ env.WRT_KVER }}
+
+  cache-rollover:
+    name: Roll cache generations
+    needs: core
+    if: inputs.WRT_TEST != 'true' && needs.core.result == 'success'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: wrt-cache-rollover-${{github.ref}}-${{needs.core.outputs.cache_prefix}}
+      cancel-in-progress: false
+    env:
+      GH_REPO: ${{github.repository}}
+      WRT_CACHE_PREFIX: ${{needs.core.outputs.cache_prefix}}
+      WRT_CACHE_KEY: ${{needs.core.outputs.cache_key}}
+      WRT_CACHE_STARTED: ${{needs.core.outputs.cache_started}}
+    steps:
+      - name: Roll Build Cache
+        # 清理异常只警告，不把已发布固件标为构建失败。
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          CACHES=$(gh cache list --repo "$GH_REPO" --key "$WRT_CACHE_PREFIX-" --ref "$GITHUB_REF" --limit 100 --json id,key,createdAt)
+          CURRENT_CREATED=$(jq -r --arg key "$WRT_CACHE_KEY" '[.[] | select(.key == $key) | .createdAt] | min // empty' <<< "$CACHES")
+          if [ -z "$CURRENT_CREATED" ]; then
+            echo "skip cache rollover: current cache is not available"
+            exit 0
+          fi
+
+          # 只清理早于本次恢复、且早于当前缓存的条目。
+          # 保护重叠构建新保存的缓存，也防止重跑旧提交删除较新的缓存。
+          jq -r --arg key "$WRT_CACHE_KEY" --arg started "$WRT_CACHE_STARTED" --arg current "$CURRENT_CREATED" \
+            '.[] | select(.key != $key and .createdAt < $started and .createdAt < $current) | .id' <<< "$CACHES" |
+            while IFS= read -r CACHE_ID; do
+              [ -n "$CACHE_ID" ] || continue
+              gh cache delete "$CACHE_ID" --repo "$GH_REPO" ||
+                echo "::warning::Failed to delete cache $CACHE_ID"
+            done
