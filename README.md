@@ -83,12 +83,15 @@ iStore 前端资源 → 重命名为 istore-ui-v0.2.0-2.tar.gz，放入 ~/immort
 文件	下载地址	重命名为	放到
 
 # DAED 源码
+
 ```bash
 https://github.com/daeuniverse/daed/archive/671e65d2fdcd62fe6a3ec18ecda209c5addea898.tar.gz
+
 ```
 	重命名为
 ```bash
 daed-2026.08.26.tar.gz
+
 ```
 放到
 ```bash
