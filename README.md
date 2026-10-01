@@ -8,20 +8,35 @@
 
 ## 目录结构
 Openwrt-AX6600/
+
 ├── README.md
+
 ├── Config/ # 编译配置
+
 │ ├── GENERAL_AX6600.txt # 通用配置（PURE/PLUS 共用）
+
 │ ├── GENERAL_AX6600_PLUS.txt # PLUS 版增量配置
+
 │ └── IPQ60XX-WIFI-YES.txt # 设备平台配置
+
 ├── Scripts/
+
 │ ├── Dependencies.sh # ① 安装系统依赖
+
 │ ├── Setup.sh # ② 克隆源码+应用定制
+
 │ ├── Apply-Local-Changes.sh # ③ 本地修改（Setup 自动调用）
+
 │ ├── Build.sh # ④ 编译固件
+
 │ ├── Packages.sh # 插件克隆（Setup 自动调用）
+
 │ └── Settings.sh # 原配置脚本
+
 └── Docs/
+
 └── 本地编译步骤.md
+
 
 
 ## 操作顺序（新电脑从零开始）
@@ -121,16 +136,29 @@ make package/插件名/compile V=s -j1
 
 
 常见问题
+
 Q: 编译报错 GnuTLS recv error / CONNECT tunnel failed
+
 A: GitHub 访问不稳定。手动下载对应源码包放入 dl/，或稍后重试。
 
+
+
+
 Q: kmod-oaf 编译报 del_timer_sync 未定义
+
 A: 内核 6.18 已移除该函数。执行 bash Scripts/Apply-Local-Changes.sh 会自动修复。
 
+
+
 Q: iStore 在界面看不到
+
 A: 确认 .config 里有 CONFIG_PACKAGE_luci-app-store=y。没有则执行 make menuconfig，在 LuCI → 3. Applications 里勾选。
 
+
+
 Q: 固件太大（180MB）
+
 A: 固件包含 DAED/OpenClash/PassWall2/Docker/AdGuard Home 等重型插件。如需精简，用 ./scripts/size_compare.sh -p 分析并移除不需要的包。
+
 
 
