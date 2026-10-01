@@ -31,11 +31,16 @@ Openwrt-AX6600/
 cd ~
 git clone https://github.com/ones20250/Openwrt-AX6600.git ax6600-config
 cd ax6600-config
+```
 第二步：安装系统依赖（只需一次）
+```bash
 bash Scripts/Dependencies.sh
+```
 第三步：搭建编译环境
 bash
+```bash
 bash Scripts/Setup.sh
+```
 这个脚本会自动：
 
 克隆 immortalwrt_ipq 源码到 ~/immortalwrt
@@ -60,47 +65,59 @@ iStore 前端资源 → 重命名为 istore-ui-v0.2.0-2.tar.gz，放入 ~/immort
 在浏览器打开以下地址下载：
 
 文件	下载地址	重命名为	放到
+```bash
 DAED 源码	https://github.com/daeuniverse/daed/archive/671e65d2fdcd62fe6a3ec18ecda209c5addea898.tar.gz	daed-2026.08.26.tar.gz	~/immortalwrt/dl/
 iStore 前端	https://github.com/linkease/istore-ui/archive/refs/tags/v0.2.0-2.tar.gz	istore-ui-v0.2.0-2.tar.gz	~/immortalwrt/dl/
+```
 下载后执行，修正 DAED 哈希：
 
-bash
+```bash
 cd ~/immortalwrt
 HASH=$(sha256sum dl/daed-2026.08.26.tar.gz | cut -d' ' -f1)
 sed -i "s|^PKG_MIRROR_HASH:=.*|PKG_MIRROR_HASH:=$HASH|" package/luci-app-daed/daed/Makefile
 echo "DAED 哈希已更新为: $HASH"
-
+```
 第五步：编译固件
-bash
+```bash
 bash Scripts/Build.sh
+```
 耗时约 1.5～3 小时（首次编译）。
 
 第六步：找到固件
-bash
+```bash
 ls -lh ~/immortalwrt/bin/targets/qualcommax/ipq60xx/*.bin
+```
 刷机（路由器上执行）：
 
-bash
+```bash
 sysupgrade -n /tmp/xxx-sysupgrade.bin
+```
 后续更新
 同步上游内核和插件更新
-bash
+
+```bash
 cd ~/immortalwrt
 # 拉取上游核心源码更新
 git remote add upstream https://github.com/ones20250/immortalwrt_ipq.git 2>/dev/null
 git pull --rebase --autostash upstream main
-
+```
 # 更新 feeds
+```bash
 ./scripts/feeds update -a
 ./scripts/feeds install -a
-然后重新执行 bash Scripts/Build.sh。
+```
+然后重新执行 
+```bash
+bash Scripts/Build.sh
+```
 
 只更新某个插件
-bash
+```bash
 cd ~/immortalwrt/package/插件目录
 git pull
 cd ~/immortalwrt
 make package/插件名/compile V=s -j1
+```
 
 
 常见问题
