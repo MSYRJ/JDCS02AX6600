@@ -45,7 +45,7 @@ Openwrt-AX6600/
 ### 第一步：克隆本仓库
 ```bash
 cd ~
-git clone https://github.com/ones20250/Openwrt-AX6600.git ax6600-config
+git clone https://github.com/MSYRJ/JDCS02AX6600.git ax6600-config
 cd ax6600-config
 ```
 第二步：安装系统依赖（只需一次）
