@@ -39,3 +39,36 @@ if [ -f package/OpenAppFilter/oaf/src/af_client.c ]; then
 fi
 
 echo "=== 本地修改应用完成 ==="
+
+# =========================================================
+# 6. eBPF / BTF 内核支持（DAED 必需）
+# =========================================================
+if [ -f .config ]; then
+    cat >> .config << 'EOF'
+CONFIG_DEVEL=y
+CONFIG_BPF_TOOLCHAIN_HOST=y
+# CONFIG_BPF_TOOLCHAIN_NONE is not set
+CONFIG_KERNEL_BPF_EVENTS=y
+CONFIG_KERNEL_CGROUP_BPF=y
+CONFIG_KERNEL_DEBUG_INFO=y
+CONFIG_KERNEL_DEBUG_INFO_BTF=y
+# CONFIG_KERNEL_DEBUG_INFO_REDUCED is not set
+CONFIG_KERNEL_XDP_SOCKETS=y
+EOF
+    echo "eBPF/BTF 配置已追加到 .config"
+fi
+
+# =========================================================
+# 7. tc / iproute2 / kmod-sched（仅保留最小集）
+# =========================================================
+if [ -f .config ]; then
+    # 先清除所有 kmod-sched 配置，避免重复
+    sed -i '/^CONFIG_PACKAGE_kmod-sched/d' .config
+    cat >> .config << 'EOF'
+CONFIG_PACKAGE_tc-full=y
+CONFIG_PACKAGE_ip-full=y
+CONFIG_PACKAGE_kmod-sched-core=y
+CONFIG_PACKAGE_kmod-sched-bpf=y
+EOF
+    echo "tc/iproute2/kmod-sched 配置已追加到 .config"
+fi
