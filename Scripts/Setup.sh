@@ -53,6 +53,8 @@ WRT_PROFILE=PLUS "$WRT_DIR/Scripts/Packages.sh"
 echo "--- 克隆 DAED 和 OAF ---"
 [ -d luci-app-daed ] || git clone --depth=1 https://github.com/QiuSimons/luci-app-daed.git
 [ -d OpenAppFilter ] || git clone --depth=1 https://github.com/destan19/OpenAppFilter.git
+[ -d msd_lite ] || git clone --depth=1 https://github.com/TowayWei/msd_lite.git
+[ -d luci-app-msd_lite ] || git clone --depth=1 https://github.com/hejiadong0608/luci-app-msd_lite.git
 
 # 7. 应用本地修改
 echo "--- 应用本地修改 ---"

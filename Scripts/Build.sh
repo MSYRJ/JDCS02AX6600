@@ -17,6 +17,13 @@ echo "CONFIG_PACKAGE_luci-app-store=y" >> .config
 echo "CONFIG_PACKAGE_luci-app-oaf=y" >> .config
 echo "CONFIG_PACKAGE_kmod-oaf=y" >> .config
 echo "CONFIG_PACKAGE_appfilter=y" >> .config
+echo "CONFIG_PACKAGE_msd_lite=y" >> .config
+echo "CONFIG_PACKAGE_luci-app-msd_lite=y" >> .config
+
+# 自动开启所有中文语言包
+for i18n in $(grep -oP "CONFIG_PACKAGE_\Kluci-i18n-[a-z0-9_-]+-zh-cn(?=:)" tmp/.config-package.in 2>/dev/null); do
+    echo "CONFIG_PACKAGE_$i18n=y" >> .config
+done
 
 # 2. defconfig
 echo "--- 运行 defconfig ---"

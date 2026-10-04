@@ -72,3 +72,24 @@ CONFIG_PACKAGE_kmod-sched-bpf=y
 EOF
     echo "tc/iproute2/kmod-sched 配置已追加到 .config"
 fi
+
+# =========================================================
+# 9. 中文语言 + iStore + DAED geoip 依赖
+# =========================================================
+if [ -f .config ]; then
+    cat >> .config << 'EOF'
+CONFIG_LUCI_LANG_zh_Hans=y
+CONFIG_PACKAGE_luci-app-store=y
+CONFIG_PACKAGE_luci-lib-taskd=y
+CONFIG_PACKAGE_luci-lib-xterm=y
+CONFIG_PACKAGE_taskd=y
+CONFIG_PACKAGE_xz-utils=y
+CONFIG_PACKAGE_mount-utils=y
+CONFIG_PACKAGE_tar=y
+CONFIG_PACKAGE_daed-geoip=y
+CONFIG_PACKAGE_daed-geosite=y
+CONFIG_PACKAGE_msd_lite=y
+CONFIG_PACKAGE_luci-app-msd_lite=y
+EOF
+    echo "中文/iStore/msd_lite 配置已追加"
+fi
