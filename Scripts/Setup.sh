@@ -43,6 +43,10 @@ grep -q "istore" feeds.conf.default || \
 ./scripts/feeds install -a -p istore
 # 删除 feeds 里的旧版 OAF，避免覆盖 package/OpenAppFilter 官方源码
 rm -rf feeds/packages/net/open-app-filter
+# 添加 rtp2httpd feed
+grep -q "rtp2httpd" feeds.conf.default || echo "src-git rtp2httpd https://github.com/stackia/rtp2httpd.git" >> feeds.conf.default
+./scripts/feeds update rtp2httpd
+./scripts/feeds install rtp2httpd
 
 # 5. 克隆 PLUS 插件
 echo "--- 克隆 PLUS 版插件 ---"
@@ -53,8 +57,6 @@ WRT_PROFILE=PLUS "$WRT_DIR/Scripts/Packages.sh"
 echo "--- 克隆 DAED 和 OAF ---"
 [ -d luci-app-daed ] || git clone --depth=1 https://github.com/QiuSimons/luci-app-daed.git
 [ -d OpenAppFilter ] || git clone --depth=1 https://github.com/destan19/OpenAppFilter.git
-[ -d msd_lite ] || git clone --depth=1 https://github.com/TowayWei/msd_lite.git
-[ -d luci-app-msd_lite ] || git clone --depth=1 https://github.com/hejiadong0608/luci-app-msd_lite.git
 
 # 7. 应用本地修改
 echo "--- 应用本地修改 ---"

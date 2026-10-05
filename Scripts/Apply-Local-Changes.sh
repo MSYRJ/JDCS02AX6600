@@ -88,8 +88,6 @@ CONFIG_PACKAGE_mount-utils=y
 CONFIG_PACKAGE_tar=y
 CONFIG_PACKAGE_daed-geoip=y
 CONFIG_PACKAGE_daed-geosite=y
-CONFIG_PACKAGE_msd_lite=y
-CONFIG_PACKAGE_luci-app-msd_lite=y
 EOF
-    echo "中文/iStore/msd_lite 配置已追加"
+    echo "中文/iStore 配置已追加"
 fi
