@@ -10,13 +10,6 @@ sed -i '/^define Device\/jdcloud_re-cs-02$/,/^endef$/ s/KERNEL_SIZE := 6144k/KER
 sed -i '/^define Device\/jdcloud_re-cs-02$/,/^endef$/ s/DEVICE_VENDOR := JDCloud/DEVICE_VENDOR := MSYRJ/' \
     target/linux/qualcommax/image/ipq60xx.mk
 
-# 2. WiFi 名称改为 wlan
-sed -i "s/\.ssid='OWRT'/.ssid='wlan'/g; s/\.ssid='ImmortalWrt'/.ssid='wlan'/g; s/\.ssid='OpenWrt'/.ssid='wlan'/g" \
-    package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc
-
-# 3. 主机名改为 MSYRJ
-sed -i "s/hostname='OWRT'/hostname='MSYRJ'/g; s/hostname='ImmortalWrt'/hostname='MSYRJ'/g" \
-    package/base-files/files/bin/config_generate
 
 # 4. 注释 docker/dockerd 的 GitHub 校验
 if [ -f feeds/packages/utils/docker/Makefile ]; then
@@ -91,3 +84,11 @@ CONFIG_PACKAGE_daed-geosite=y
 EOF
     echo "中文/iStore 配置已追加"
 fi
+
+# ===== 兼容最新源码 =====
+# WiFi SSID（源码默认 ${defaults?.ssid || 'OWRT'}）
+sed -i "s/|| 'OWRT'/|| 'wlan'/g" package/network/config/wifi-scripts/files/lib/wifi/mac80211.uc
+# 主机名（源码默认 ImmortalWRT，大写 WRT）
+sed -i "s/hostname='ImmortalWRT'/hostname='MSYRJ'/g" package/base-files/files/bin/config_generate
+# IP（源码默认 192.168.1.1）
+sed -i 's/ipad=${ipaddr:-"192.168.1.1"}/ipad=${ipaddr:-"192.168.10.1"}/' package/base-files/files/bin/config_generate

@@ -43,6 +43,7 @@ grep -q "istore" feeds.conf.default || \
 ./scripts/feeds install -a -p istore
 # 删除 feeds 里的旧版 OAF，避免覆盖 package/OpenAppFilter 官方源码
 rm -rf feeds/packages/net/open-app-filter
+rm -rf feeds/packages/net/daed
 # 添加 rtp2httpd feed
 grep -q "rtp2httpd" feeds.conf.default || echo "src-git rtp2httpd https://github.com/stackia/rtp2httpd.git" >> feeds.conf.default
 ./scripts/feeds update rtp2httpd
